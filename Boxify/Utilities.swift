@@ -15,7 +15,7 @@ extension UIImage {
         guard let ciImage = CIImage(image: self) else {
             return nil
         }
-        return UIImage(ciImage: ciImage.applyingFilter("CIColorInvert", withInputParameters: nil))
+        return UIImage(ciImage: ciImage.applyingFilter("CIColorInvert"))
     }
 	
 	static func composeButtonImage(from thumbImage: UIImage, alpha: CGFloat = 1.0) -> UIImage {
@@ -346,10 +346,10 @@ extension ARSCNView {
 		
 		let points = features.points
 		
-		for i in 0...features.count {
-			
-			let feature = points.advanced(by: Int(i))
-			let featurePos = SCNVector3(feature.pointee)
+		for i in 0...points.count-1 {
+            
+			let feature = points[Int(i)]
+			let featurePos = SCNVector3(feature)
 			
 			let originToFeature = featurePos - ray.origin
 			
@@ -422,9 +422,9 @@ extension ARSCNView {
 		var closestFeaturePoint = origin
 		var minDistance = Float.greatestFiniteMagnitude
 		
-		for i in 0...features.count {
-			let feature = points.advanced(by: Int(i))
-			let featurePos = SCNVector3(feature.pointee)
+		for i in 0...points.count-1 {
+			let feature = points[Int(i)]
+			let featurePos = SCNVector3(feature)
 			
 			let originVector = origin - featurePos
 			let crossProduct = originVector.cross(direction)

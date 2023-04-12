@@ -11,172 +11,192 @@ import SceneKit
 import ARKit
 
 class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDelegate {
-
+    
     @IBOutlet var sceneView: ARSCNView!
-	
-	var panGesture: UIPanGestureRecognizer!
-	var doubleTapGesture: UITapGestureRecognizer!
-	var rotationGesture: UIRotationGestureRecognizer!
-	
-	var box: Box!
-	var hitTestPlane: SCNNode!
-	var floor: SCNNode!
-	
-	var currentAnchor: ARAnchor?
-	
-	struct RenderingCategory: OptionSet {
-		let rawValue: Int
-		static let reflected = RenderingCategory(rawValue: 1 << 1)
-		static let planes = RenderingCategory(rawValue: 1 << 2)
-	}
-	
-	enum InteractionMode {
-		case waitingForLocation
-		case draggingInitialWidth, draggingInitialLength
-		case waitingForFaceDrag, draggingFace(side: Box.Side, dragStart: SCNVector3)
-	}
-	
-	var planesShown: Bool {
-		get { return RenderingCategory(rawValue: sceneView.pointOfView!.camera!.categoryBitMask).contains(.planes) }
-		set {
-			var mask = RenderingCategory(rawValue: sceneView.pointOfView!.camera!.categoryBitMask)
-			if newValue == true {
-				mask.formUnion(.planes)
-			} else {
-				mask.subtract(.planes)
-			}
-			sceneView.pointOfView!.camera!.categoryBitMask = mask.rawValue
-		}
-	}
-	
-	var mode: InteractionMode = .waitingForLocation {
-		didSet {
-			switch mode {
-			case .waitingForLocation:
-				rotationGesture.isEnabled = false
-				
-				box.isHidden = true
-				box.clearHighlights()
-				
-				hitTestPlane.isHidden = true
-				floor.isHidden = true
-				
-				planesShown = true
-				
-			case .draggingInitialWidth, .draggingInitialLength:
-				rotationGesture.isEnabled = true
-				
-				box.isHidden = false
-				box.clearHighlights()
-				
-				floor.isHidden = false
-				
-				// Place the hit-test plane flat on the z-axis, aligned with the bottom of the box.
-				hitTestPlane.isHidden = false
-				hitTestPlane.position = .zero
-				hitTestPlane.boundingBox.min = SCNVector3(x: -1000, y: 0, z: -1000)
-				hitTestPlane.boundingBox.max = SCNVector3(x: 1000, y: 0, z: 1000)
-				
-				planesShown = false
-				
-			case .waitingForFaceDrag:
-				rotationGesture.isEnabled = true
-				
-				box.isHidden = false
-				box.clearHighlights()
-				
-				floor.isHidden = false
-				hitTestPlane.isHidden = true
-				
-				planesShown = false
-				
-			case .draggingFace(let side, let dragStart):
-				rotationGesture.isEnabled = true
-				
-				box.isHidden = false
-				floor.isHidden = false
-				
-				hitTestPlane.isHidden = false
-				hitTestPlane.position = dragStart
-				
-				planesShown = false
-				
-				box.highlight(side: side)
-				
-				// Place the hit-test plane straight through the dragged side, centered at the point on which the drag started.
-				// This makes the drag operation act as though you're dragging that exact point on the side to a new location.
-				// TODO: the plane should be constrained so that it always rotates to face the camera along the axis that goes through the dragged side.
-				switch side.axis {
-				case .x:
-					hitTestPlane.boundingBox.min = SCNVector3(x: -1000, y: -1000, z: 0)
-					hitTestPlane.boundingBox.max = SCNVector3(x: 1000, y: 1000, z: 0)
-				case .y:
-					hitTestPlane.boundingBox.min = SCNVector3(x: -1000, y: -1000, z: 0)
-					hitTestPlane.boundingBox.max = SCNVector3(x: 1000, y: 1000, z: 0)
-				case .z:
-					hitTestPlane.boundingBox.min = SCNVector3(x: 0, y: -1000, z: -1000)
-					hitTestPlane.boundingBox.max = SCNVector3(x: 0, y: 1000, z: 1000)
-				}
-			}
-		}
-	}
-	
+    
+    var panGesture: UIPanGestureRecognizer!
+    var doubleTapGesture: UITapGestureRecognizer!
+    var rotationGesture: UIRotationGestureRecognizer!
+    var tapGesture: UITapGestureRecognizer!
+    
+    var box: Box!
+    var hitTestPlane: SCNNode!
+    var floor: SCNNode!
+    
+    var currentAnchor: ARAnchor?
+    
+    var tapA: SCNNode!
+    var tapMode: Bool = false {
+        didSet {
+            if tapMode {
+                tapA.isHidden = false
+            } else {
+                tapA.isHidden = true
+            }
+    
+        }
+    }
+    
+    struct RenderingCategory: OptionSet {
+        let rawValue: Int
+        static let reflected = RenderingCategory(rawValue: 1 << 1)
+        static let planes = RenderingCategory(rawValue: 1 << 2)
+    }
+    
+    enum InteractionMode {
+        case waitingForLocation
+        case draggingInitialWidth, draggingInitialLength
+        case waitingForFaceDrag, draggingFace(side: Box.Side, dragStart: SCNVector3)
+    }
+    
+    var planesShown: Bool {
+        get { return RenderingCategory(rawValue: sceneView.pointOfView!.camera!.categoryBitMask).contains(.planes) }
+        set {
+            var mask = RenderingCategory(rawValue: sceneView.pointOfView!.camera!.categoryBitMask)
+            if newValue == true {
+                mask.formUnion(.planes)
+            } else {
+                mask.subtract(.planes)
+            }
+            sceneView.pointOfView!.camera!.categoryBitMask = mask.rawValue
+        }
+    }
+    
+    var mode: InteractionMode = .waitingForLocation {
+        didSet {
+            switch mode {
+            case .waitingForLocation:
+                rotationGesture.isEnabled = false
+                
+                box.isHidden = true
+                box.clearHighlights()
+                
+                hitTestPlane.isHidden = true
+                floor.isHidden = true
+                
+                planesShown = true
+                
+            case .draggingInitialWidth, .draggingInitialLength:
+                rotationGesture.isEnabled = true
+                
+                box.isHidden = false
+                box.clearHighlights()
+                
+                floor.isHidden = false
+                
+                // Place the hit-test plane flat on the z-axis, aligned with the bottom of the box.
+                hitTestPlane.isHidden = false
+                hitTestPlane.position = .zero
+                hitTestPlane.boundingBox.min = SCNVector3(x: -1000, y: 0, z: -1000)
+                hitTestPlane.boundingBox.max = SCNVector3(x: 1000, y: 0, z: 1000)
+                
+                planesShown = false
+                
+            case .waitingForFaceDrag:
+                rotationGesture.isEnabled = true
+                
+                box.isHidden = false
+                box.clearHighlights()
+                
+                floor.isHidden = false
+                hitTestPlane.isHidden = true
+                
+                planesShown = false
+                
+            case .draggingFace(let side, let dragStart):
+                rotationGesture.isEnabled = true
+                
+                box.isHidden = false
+                floor.isHidden = false
+                
+                hitTestPlane.isHidden = false
+                hitTestPlane.position = dragStart
+                
+                planesShown = false
+                
+                box.highlight(side: side)
+                
+                // Place the hit-test plane straight through the dragged side, centered at the point on which the drag started.
+                // This makes the drag operation act as though you're dragging that exact point on the side to a new location.
+                // TODO: the plane should be constrained so that it always rotates to face the camera along the axis that goes through the dragged side.
+                switch side.axis {
+                case .x:
+                    hitTestPlane.boundingBox.min = SCNVector3(x: -1000, y: -1000, z: 0)
+                    hitTestPlane.boundingBox.max = SCNVector3(x: 1000, y: 1000, z: 0)
+                case .y:
+                    hitTestPlane.boundingBox.min = SCNVector3(x: -1000, y: -1000, z: 0)
+                    hitTestPlane.boundingBox.max = SCNVector3(x: 1000, y: 1000, z: 0)
+                case .z:
+                    hitTestPlane.boundingBox.min = SCNVector3(x: 0, y: -1000, z: -1000)
+                    hitTestPlane.boundingBox.max = SCNVector3(x: 0, y: 1000, z: 1000)
+                }
+            }
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         // Set the view's delegate
         sceneView.delegate = self
-		
-		sceneView.antialiasingMode = .multisampling4X
-		sceneView.autoenablesDefaultLighting = true
-		
-		panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
-		
-		doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap))
-		doubleTapGesture.numberOfTapsRequired = 2
-		
-		rotationGesture = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation))
-		
-		sceneView.addGestureRecognizer(panGesture)
-		sceneView.addGestureRecognizer(doubleTapGesture)
-		sceneView.addGestureRecognizer(rotationGesture)
-		
-		box = Box()
-		box.isHidden = true
-		sceneView.scene.rootNode.addChildNode(box)
-		
-		// Create an invisible plane used for hit-testing during drag operations.
-		// This is a child of the box, so it inherits the box's own transform.
-		// It is resized and repositioned within the box depending on what part of the box is being dragged.
-		hitTestPlane = SCNNode()
-		hitTestPlane.isHidden = true
-		box.addChildNode(hitTestPlane)
-		
-		let floorSurface = SCNFloor()
-		floorSurface.reflectivity = 0.2
-		floorSurface.reflectionFalloffEnd = 0.05
-		floorSurface.reflectionCategoryBitMask = RenderingCategory.reflected.rawValue
-		
-		// Floor scene reflections are blended with the diffuse color's transparency mask, so if diffuse is transparent then no reflection will be shown.
-		// To get around this, we make the floor black and use additive blending so that only the brighter reflection is shown.
-		floorSurface.firstMaterial?.diffuse.contents = UIColor.black
-		floorSurface.firstMaterial?.writesToDepthBuffer = false
-		floorSurface.firstMaterial?.blendMode = .add
-		
-		floor = SCNNode(geometry: floorSurface)
-		floor.isHidden = true
-		
-		box.addChildNode(floor)
-		box.categoryBitMask |= RenderingCategory.reflected.rawValue
+        
+        sceneView.antialiasingMode = .multisampling4X
+        sceneView.autoenablesDefaultLighting = true
+        
+        panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
+        
+        doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap))
+        doubleTapGesture.numberOfTapsRequired = 2
+        
+        rotationGesture = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation))
+        
+        tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tapGesture.require(toFail: doubleTapGesture)
+        
+        sceneView.addGestureRecognizer(panGesture)
+        sceneView.addGestureRecognizer(doubleTapGesture)
+        sceneView.addGestureRecognizer(rotationGesture)
+        sceneView.addGestureRecognizer(tapGesture)
+        
+        box = Box()
+        box.isHidden = true
+        sceneView.scene.rootNode.addChildNode(box)
+        
+        tapA = self.makeVertex()
+                
+        // Create an invisible plane used for hit-testing during drag operations.
+        // This is a child of the box, so it inherits the box's own transform.
+        // It is resized and repositioned within the box depending on what part of the box is being dragged.
+        hitTestPlane = SCNNode()
+        hitTestPlane.isHidden = true
+        box.addChildNode(hitTestPlane)
+        
+        let floorSurface = SCNFloor()
+        floorSurface.reflectivity = 0.2
+        floorSurface.reflectionFalloffEnd = 0.05
+        floorSurface.reflectionCategoryBitMask = RenderingCategory.reflected.rawValue
+        
+        // Floor scene reflections are blended with the diffuse color's transparency mask, so if diffuse is transparent then no reflection will be shown.
+        // To get around this, we make the floor black and use additive blending so that only the brighter reflection is shown.
+        floorSurface.firstMaterial?.diffuse.contents = UIColor.black
+        floorSurface.firstMaterial?.writesToDepthBuffer = false
+        floorSurface.firstMaterial?.blendMode = .add
+        
+        floor = SCNNode(geometry: floorSurface)
+        floor.isHidden = true
+        
+        box.addChildNode(floor)
+        box.categoryBitMask |= RenderingCategory.reflected.rawValue
     }
-	
+    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         
         // Create a session configuration
-        let configuration = ARWorldTrackingSessionConfiguration()
-		configuration.planeDetection = .horizontal
-		
+        
+        let configuration = ARWorldTrackingConfiguration()
+        configuration.planeDetection = .horizontal
+        
         // Run the view's session
         sceneView.session.run(configuration)
     }
@@ -187,75 +207,115 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         // Pause the view's session
         sceneView.session.pause()
     }
-	
-	func resetBox() {
-		mode = .waitingForLocation
-		box.resizeTo(min: .zero, max: .zero)
-		currentAnchor = nil
-	}
-	
-	// MARK: - Touch handling
-	
-	@objc dynamic func handlePan(_ gestureRecognizer: UIPanGestureRecognizer) {
-		switch mode {
-		case .waitingForLocation:
-			findStartingLocation(gestureRecognizer)
-		case .draggingInitialWidth:
-			handleInitialWidthDrag(gestureRecognizer)
-		case .draggingInitialLength:
-			handleInitialLengthDrag(gestureRecognizer)
-		case .waitingForFaceDrag:
-			findFaceDragLocation(gestureRecognizer)
-		case .draggingFace:
-			handleFaceDrag(gestureRecognizer)
-		}
-	}
-	
-	@objc dynamic func handleDoubleTap(_ gestureRecognizer: UIPanGestureRecognizer) {
-		resetBox()
-	}
-	
-	// MARK: Twist-to-rotate gesture handling
-	
-	fileprivate var lastRotation = CGFloat(0)
-	@objc dynamic func handleRotation(_ gestureRecognizer: UIRotationGestureRecognizer) {
-		let currentRotation = gestureRecognizer.rotation
-		switch gestureRecognizer.state {
-		case .began:
-			lastRotation = currentRotation
-		case .changed:
-			let rotationDelta = currentRotation - lastRotation
-			lastRotation = currentRotation
-			
-			let rotation = SCNQuaternion(radians: -Float(rotationDelta), around: .axisY)
-			let rotationPivot = box.pointInBounds(at: SCNVector3(x: 0.5, y: 0, z: 0.5))
-			let pivotInWorld = box.convertPosition(rotationPivot, to: nil)
-			box.rotate(by: rotation, aroundTarget: pivotInWorld)
-		default:
-			break
-		}
-	}
-	
-	// MARK: Drag Gesture handling
-	
-	func findStartingLocation(_ gestureRecognizer: UIPanGestureRecognizer) {
-		switch gestureRecognizer.state {
-		case .began, .changed:
-			// Use real-world ARKit coordinates to determine where to start drawing
-			let touchPos = gestureRecognizer.location(in: sceneView)
-			
-			let hit = realWorldHit(at: touchPos)
-			if let startPos = hit.position, let plane = hit.planeAnchor {
-				// Once the user hits a usable real-world plane, switch into line-dragging mode
-				box.position = startPos
-				currentAnchor = plane
-				mode = .draggingInitialWidth
-			}
-		default:
-			break
-		}
-	}
-	
+    
+    func resetBox() {
+        mode = .waitingForLocation
+        box.resizeTo(min: .zero, max: .zero)
+        currentAnchor = nil
+    }
+    
+    // MARK: - Touch handling
+    
+    @objc dynamic func handlePan(_ gestureRecognizer: UIPanGestureRecognizer) {
+        tapMode = false
+        switch mode {
+        case .waitingForLocation:
+            findStartingLocation(gestureRecognizer)
+        case .draggingInitialWidth:
+            handleInitialWidthDrag(gestureRecognizer)
+        case .draggingInitialLength:
+            handleInitialLengthDrag(gestureRecognizer)
+        case .waitingForFaceDrag:
+            findFaceDragLocation(gestureRecognizer)
+        case .draggingFace:
+            handleFaceDrag(gestureRecognizer)
+        }
+    }
+    
+    @objc dynamic func handleDoubleTap(_ gestureRecognizer: UIPanGestureRecognizer) {
+        resetBox()
+        tapMode = false
+    }
+    
+    // MARK: Twist-to-rotate gesture handling
+    
+    fileprivate var lastRotation = CGFloat(0)
+    @objc dynamic func handleRotation(_ gestureRecognizer: UIRotationGestureRecognizer) {
+        let currentRotation = gestureRecognizer.rotation
+        switch gestureRecognizer.state {
+        case .began:
+            lastRotation = currentRotation
+        case .changed:
+            let rotationDelta = currentRotation - lastRotation
+            lastRotation = currentRotation
+            
+            let rotation = SCNQuaternion(radians: -Float(rotationDelta), around: .axisY)
+            let rotationPivot = box.pointInBounds(at: SCNVector3(x: 0.5, y: 0, z: 0.5))
+            let pivotInWorld = box.convertPosition(rotationPivot, to: nil)
+            box.rotate(by: rotation, aroundTarget: pivotInWorld)
+        default:
+            break
+        }
+    }
+    
+    // MARK: Drag Gesture handling
+    
+    func findStartingLocation(_ gestureRecognizer: UIPanGestureRecognizer) {
+        switch gestureRecognizer.state {
+        case .began, .changed:
+            // Use real-world ARKit coordinates to determine where to start drawing
+            let touchPos = gestureRecognizer.location(in: sceneView)
+            
+            let hit = realWorldHit(at: touchPos)
+            if let startPos = hit.position, let plane = hit.planeAnchor {
+                // Once the user hits a usable real-world plane, switch into line-dragging mode
+                box.position = startPos
+                currentAnchor = plane
+                mode = .draggingInitialWidth
+            }
+        default:
+            break
+        }
+    }
+    
+    // MARK: Tap Gesture handling
+    
+    @objc dynamic func handleTap(_ gestureRecognizer: UITapGestureRecognizer) {
+        switch gestureRecognizer.state {
+        case .ended:
+            // Use real-world ARKit coordinates to determine where to start drawing
+            let touchPos = gestureRecognizer.location(in: sceneView)
+            
+            let hit = realWorldHit(at: touchPos)
+            if let startPos = hit.position, let plane = hit.planeAnchor {
+                // Once the user hits a usable real-world plane, switch into line-dragging mode
+                tapMode = true
+                switch mode {
+                case .waitingForLocation:
+                    tapA.position = startPos
+                    box.position = startPos
+                    currentAnchor = plane
+                    mode = .draggingInitialWidth
+                case .draggingInitialWidth:
+                    
+                    let delta = box.position - startPos
+                    let distance = delta.length
+                    let angleInRadians = atan2(delta.z, delta.x)
+                    
+                    box.move(side: .right, to: distance)
+                    box.rotation = SCNVector4(x: 0, y: 1, z: 0, w: -(angleInRadians + Float.pi))
+                    mode = .draggingInitialLength
+                default:
+                    break
+                }
+    
+                
+            }
+        default:
+            break
+        }
+    }
+    
 	func handleInitialWidthDrag(_ gestureRecognizer: UIPanGestureRecognizer) {
 		switch gestureRecognizer.state {
 		case .changed:
@@ -491,5 +551,23 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     func sessionInterruptionEnded(_ session: ARSession) {
         // Reset tracking and/or remove existing anchors if consistent tracking is required
         
+    }
+    
+    fileprivate func makeNode(with geometry: SCNGeometry) -> SCNNode {
+        for material in geometry.materials {
+            material.lightingModel = .constant
+            material.diffuse.contents = UIColor.white
+            material.isDoubleSided = false
+        }
+        
+        let node = SCNNode(geometry: geometry)
+        node.isHidden = true
+        sceneView.scene.rootNode.addChildNode(node)
+        return node
+    }
+    
+    fileprivate func makeVertex() -> SCNNode {
+        let ball = SCNSphere(radius: CGFloat(0.005))
+        return makeNode(with: ball)
     }
 }
