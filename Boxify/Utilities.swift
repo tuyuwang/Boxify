@@ -524,3 +524,14 @@ func createPlane(size: CGSize, contents: AnyObject?) -> SCNPlane {
 	plane.materials = [SCNMaterial.material(withDiffuse: contents)]
 	return plane
 }
+
+// Convenience accessors for Asset Catalog named colors.
+extension UIColor {
+    static let appYellow = UIColor(named: "appYellow")!
+    static let appLightYellow = UIColor(named: "appLightYellow")!
+    static let appBrown = UIColor(named: "appBrown")!
+    static let appGreen = UIColor(named: "appGreen")!
+    static let appBlue = UIColor(named: "appBlue")!
+    static let appLightBlue = UIColor(named: "appLightBlue")!
+    static let appGray = UIColor(named: "appGray")!
+}

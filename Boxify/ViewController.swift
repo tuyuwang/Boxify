@@ -25,6 +25,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     
     var currentAnchor: ARAnchor?
     
+    private(set) var pointCloud: ScannedPointCloud!
+    var timeOfLastReferenceObjectCreation = CACurrentMediaTime()
+
     var tapA: SCNNode!
     var tapMode: Bool = false {
         didSet {
@@ -48,6 +51,15 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         case draggingInitialWidth, draggingInitialLength
         case waitingForFaceDrag, draggingFace(side: Box.Side, dragStart: SCNVector3)
     }
+    
+    enum PointCloudMode {
+        case none
+        case point
+        case line
+        case box
+    }
+    
+    var cloudMode: PointCloudMode = .none
     
     var planesShown: Bool {
         get { return RenderingCategory(rawValue: sceneView.pointOfView!.camera!.categoryBitMask).contains(.planes) }
@@ -139,6 +151,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         
         // Set the view's delegate
         sceneView.delegate = self
+        sceneView.session.delegate = self
+//        sceneView.debugOptions = .showFeaturePoints
         
         sceneView.antialiasingMode = .multisampling4X
         sceneView.autoenablesDefaultLighting = true
@@ -187,6 +201,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         
         box.addChildNode(floor)
         box.categoryBitMask |= RenderingCategory.reflected.rawValue
+        
+        pointCloud = ScannedPointCloud()
+        sceneView.scene.rootNode.addChildNode(pointCloud)
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -235,6 +252,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     @objc dynamic func handleDoubleTap(_ gestureRecognizer: UIPanGestureRecognizer) {
         resetBox()
         tapMode = false
+        cloudMode = .none
     }
     
     // MARK: Twist-to-rotate gesture handling
@@ -281,11 +299,72 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     // MARK: Tap Gesture handling
     
     @objc dynamic func handleTap(_ gestureRecognizer: UITapGestureRecognizer) {
+        
         switch gestureRecognizer.state {
         case .ended:
             // Use real-world ARKit coordinates to determine where to start drawing
             let touchPos = gestureRecognizer.location(in: sceneView)
-            
+           
+//            let hitTestResults = sceneView.hitTest(touchPos, types: .featurePoint)
+//            guard !hitTestResults.isEmpty else { return  }
+//
+//            let firstResult = hitTestResults.first!
+//
+//            for point in pointCloud.currentFramePoints {
+//
+//                let resultPosition = firstResult.worldTransform.position4
+//                let x = fabs(resultPosition.x - point.x) < 0.01
+//                let y = fabs(resultPosition.y - point.y) < 0.01
+//                let z = fabs(resultPosition.z - point.z) < 0.01
+//
+//                if true {
+//                    let position = firstResult.worldTransform.position
+////                    let hitPos = self.makeVertex()
+////                    hitPos.isHidden = false
+////                    hitPos.position = position
+//
+//                    switch cloudMode {
+//                    case .none:
+//                        cloudMode = .point
+//
+//                        box.position = position
+//                        mode = .draggingInitialWidth
+//                    case .point:
+//                        cloudMode = .line
+//
+//                        let delta = box.position - position
+//                        let distance = delta.length
+//                        let angleInRadians = atan2(delta.z, delta.x)
+//
+//                        box.move(side: .right, to: distance)
+//                        box.rotation = SCNVector4(x: 0, y: 1, z: 0, w: -(angleInRadians + Float.pi))
+//                        mode = .draggingInitialLength
+//
+//                    case .line:
+//                        cloudMode = .box
+//
+//                        // Check where the hit vector landed within the box's own coordinate system, which may be rotated.
+//                        let locationInBox = box.convertPosition(position, from: nil)
+//
+//                        // Front side faces toward +z, back side toward -z
+//                        if locationInBox.z < 0 {
+//                            box.move(side: .front, to: 0)
+//                            box.move(side: .back, to: locationInBox.z)
+//                        } else {
+//                            box.move(side: .front, to: locationInBox.z)
+//                            box.move(side: .back, to: 0)
+//                        }
+//
+//                    default:
+//                        break
+//                    }
+//
+//                    return
+//                }
+//            }
+//
+//
+//            return
             let hit = realWorldHit(at: touchPos)
             if let startPos = hit.position, let plane = hit.planeAnchor {
                 // Once the user hits a usable real-world plane, switch into line-dragging mode
@@ -296,6 +375,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
                     box.position = startPos
                     currentAnchor = plane
                     mode = .draggingInitialWidth
+                    
                 case .draggingInitialWidth:
                     
                     let delta = box.position - startPos
@@ -305,6 +385,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
                     box.move(side: .right, to: distance)
                     box.rotation = SCNVector4(x: 0, y: 1, z: 0, w: -(angleInRadians + Float.pi))
                     mode = .draggingInitialLength
+                    
                 default:
                     break
                 }
@@ -569,5 +650,78 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     fileprivate func makeVertex() -> SCNNode {
         let ball = SCNSphere(radius: CGFloat(0.005))
         return makeNode(with: ball)
+    }
+}
+
+extension ViewController: ARSessionDelegate {
+    func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        guard let frame = sceneView.session.currentFrame else { return }
+        let now = CACurrentMediaTime()
+        if now - timeOfLastReferenceObjectCreation > 0.1 {
+            timeOfLastReferenceObjectCreation = now
+            
+//            let v = SIMD4<Float>(0.01)
+//            let transform = simd_float4x4(v, v, v, v)
+//            let extent = SIMD3<Float>(0.1, 0.1, 0.1)
+//            sceneView.session.createReferenceObject(transform: box.simdWorldTransform, center: SIMD3<Float>(), extent: extent) { object, error in
+//                if let refrenceObject = object {
+//                    self.pointCloud.update(with: refrenceObject.rawFeaturePoints)
+//                }
+//            }
+            
+            if let currentPoints = frame.rawFeaturePoints {
+                pointCloud.update(with: currentPoints)
+            }
+        }
+        
+        pointCloud.updateOnEveryFrame()
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
+        print("did add")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, willUpdate node: SCNNode, for anchor: ARAnchor) {
+        print("will update")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, didRemove node: SCNNode, for anchor: ARAnchor) {
+        print("did remove")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, didRenderScene scene: SCNScene, atTime time: TimeInterval) {
+//        print("did render scene")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, didApplyAnimationsAtTime time: TimeInterval) {
+//        print("did apply animations")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, didSimulatePhysicsAtTime time: TimeInterval) {
+//        print("did simulate physics")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, didApplyConstraintsAtTime time: TimeInterval) {
+//        print("did apply constraints")
+    }
+    
+    func renderer(_ renderer: SCNSceneRenderer, willRenderScene scene: SCNScene, atTime time: TimeInterval) {
+//        print("will render scene")
+    }
+}
+
+extension float4x4 {
+    var position4: SIMD3<Float> {
+        return columns.3.xyz
+    }
+}
+
+extension SIMD4 where Scalar == Float {
+    var xyz: SIMD3<Float> {
+        return SIMD3<Float>(x, y, z)
+    }
+
+    init(_ xyz: SIMD3<Float>, _ w: Float) {
+        self.init(xyz.x, xyz.y, xyz.z, w)
     }
 }
