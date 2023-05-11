@@ -40,6 +40,23 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         }
     }
     
+    lazy var resultLabel: UILabel = {
+        let label = UILabel()
+        label.frame = CGRect(x: 12, y: 45, width: view.frame.width - 12 * 2, height: 130)
+        label.numberOfLines = 0
+        label.font = UIFont.boldSystemFont(ofSize: 24)
+        label.textColor = .red
+        return label
+    }()
+    
+    lazy var lengthFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 1
+        formatter.multiplier = 100
+        return formatter
+    }()
+    
     struct RenderingCategory: OptionSet {
         let rawValue: Int
         static let reflected = RenderingCategory(rawValue: 1 << 1)
@@ -171,9 +188,11 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         sceneView.addGestureRecognizer(doubleTapGesture)
         sceneView.addGestureRecognizer(rotationGesture)
         sceneView.addGestureRecognizer(tapGesture)
+        sceneView.addSubview(resultLabel)
         
         box = Box()
         box.isHidden = true
+        box.delegate = self
         sceneView.scene.rootNode.addChildNode(box)
         
         tapA = self.makeVertex()
@@ -229,6 +248,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         mode = .waitingForLocation
         box.resizeTo(min: .zero, max: .zero)
         currentAnchor = nil
+        resultLabel.text = nil
+        resultLabel.isHidden = true
     }
     
     // MARK: - Touch handling
@@ -651,6 +672,26 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         let ball = SCNSphere(radius: CGFloat(0.005))
         return makeNode(with: ball)
     }
+    
+    //MARK: Helper
+    fileprivate func updateResultData(_ length: Float, _ width: Float, _ height: Float) {
+        guard length > 0, width > 0, height > 0 else  {
+            resultLabel.isHidden = true
+            return
+        }
+        
+        let formatLength = lengthFormatter.string(for: NSNumber(value: length))!
+        let formatWidth = lengthFormatter.string(for: NSNumber(value: width))!
+        let formatHeight = lengthFormatter.string(for: NSNumber(value: height))!
+
+        let box = length * width * height
+        
+        let formatBox = lengthFormatter.string(for: NSNumber(value: box))!
+
+        let result = "长: \(formatLength)cm\n宽: \(formatWidth)cm\n高: \(formatHeight)cm\n体积: \(box)m³"
+        resultLabel.text = result
+        resultLabel.isHidden = false
+    }
 }
 
 extension ViewController: ARSessionDelegate {
@@ -723,5 +764,11 @@ extension SIMD4 where Scalar == Float {
 
     init(_ xyz: SIMD3<Float>, _ w: Float) {
         self.init(xyz.x, xyz.y, xyz.z, w)
+    }
+}
+
+extension ViewController: BoxUpdate {
+    func update(_ length: Float, _ width: Float, _ height: Float) {
+        self.updateResultData(length, width, height)
     }
 }

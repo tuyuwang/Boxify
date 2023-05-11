@@ -8,6 +8,10 @@
 
 import SceneKit
 
+protocol BoxUpdate {
+    func update(_ length: Float, _ width: Float, _ height: Float) -> Void
+}
+
 class Box: SCNNode {
 	enum Edge {
 		case min, max
@@ -73,6 +77,8 @@ class Box: SCNNode {
 	let minHeightFlatteningThreshold = Float(0.05)
 	
 	let lengthFormatter: NumberFormatter
+    
+    var delegate: BoxUpdate?
 	
 	// Bottom vertices
 	lazy var vertexA: SCNNode = self.makeVertex()
@@ -323,6 +329,9 @@ class Box: SCNNode {
 		for node in horizontalNodes {
 			node.scale = SCNVector3(x: 1, y: flatteningRatio, z: 1)
 		}
+        
+        guard let delegate = delegate else { return }
+        delegate.update(size.z, size.x, size.y)
 	}
 	
 	fileprivate func updateLine(_ line: SCNNode, from position: SCNVector3, distance: Float, axis: SCNVector3.Axis) {
